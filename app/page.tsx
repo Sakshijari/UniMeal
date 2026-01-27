@@ -1,65 +1,60 @@
-import Image from "next/image";
-
 export default function Home() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <div className="card">
+      <header className="page-header">
+        <h1 className="page-title">Welcome to your UniMeal dashboard</h1>
+        <p className="page-subtitle">
+          This is your single place to plan meals, keep an eye on what&apos;s in
+          your kitchen, and make sure your student budget lasts all month.
+        </p>
+      </header>
+      <section className="page-grid" aria-label="UniMeal overview">
+        <div className="page-section">
+          <h2 className="page-section-title">Today&apos;s summary</h2>
+          <p className="page-section-text">
+            In the next steps, this card will show quick stats like remaining
+            budget, ingredients expiring soon, and your next planned meals.
           </p>
+          <div className="tag-row">
+            <span className="tag-pill tag-pill--highlight">
+              • Budget overview
+            </span>
+            <span className="tag-pill">• Expiring ingredients</span>
+            <span className="tag-pill">• Upcoming meals</span>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+        <div className="page-section">
+          <h2 className="page-section-title">Quick actions</h2>
+          <p className="page-section-text">
+            These buttons don&apos;t do anything yet. We&apos;ll wire them up to
+            forms and Firestore in later steps.
+          </p>
+          <div className="button-row" aria-label="Planned quick actions">
+            <button className="btn btn-primary" type="button">
+              Add a meal
+            </button>
+            <button className="btn btn-secondary" type="button">
+              Add ingredient
+            </button>
+          </div>
+          <div className="input-group">
+            <label className="input-label" htmlFor="quick-budget">
+              Set this month&apos;s budget (preview)
+            </label>
+            <input
+              id="quick-budget"
+              type="number"
+              className="input"
+              placeholder="e.g. 1500"
+              aria-describedby="quick-budget-help"
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+            <p id="quick-budget-help" className="input-helper">
+              In the real app, this will save to your UniMeal budget in
+              Firestore.
+            </p>
+          </div>
         </div>
-      </main>
+      </section>
     </div>
   );
 }
