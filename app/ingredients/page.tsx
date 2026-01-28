@@ -558,7 +558,7 @@ export default function IngredientsPage() {
                         </td>
                         <td style={{ padding: "0.75rem 0.5rem" }}>
                           {ingredient.price > 0
-                            ? `$${ingredient.price.toFixed(2)}`
+                            ? `€${ingredient.price.toFixed(2)}`
                             : "-"}
                         </td>
                         <td style={{ padding: "0.75rem 0.5rem" }}>
