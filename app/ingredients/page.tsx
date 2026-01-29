@@ -10,7 +10,7 @@ import {
   serverTimestamp,
   Timestamp,
 } from "firebase/firestore";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ProtectedRoute } from "../components/ProtectedRoute";
 import { useAuth } from "@/contexts/AuthContext";
@@ -49,6 +49,7 @@ export default function IngredientsPage() {
   const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [expiringSoonOnly, setExpiringSoonOnly] = useState(false);
+  const [exportCopied, setExportCopied] = useState(false);
 
   // Check if ingredient is expiring soon (within 3 days)
   const isExpiringSoon = (expiryDate: string): boolean => {
@@ -293,6 +294,42 @@ export default function IngredientsPage() {
     return list;
   }, [ingredients, searchQuery, expiringSoonOnly]);
 
+  const getGroceryListExportText = useCallback(() => {
+    const lines: string[] = ["UniMeal – Grocery / ingredients list", ""];
+    filteredIngredients.forEach((ing) => {
+      const priceStr = ing.price > 0 ? `€${ing.price.toFixed(2)}` : "";
+      const expiryStr = ing.expiryDate
+        ? `, expires ${formatDate(ing.expiryDate)}`
+        : "";
+      const qtyUnit = ing.unit ? `${ing.qty} ${ing.unit}` : "";
+      const parts = [ing.name, qtyUnit, priceStr].filter(Boolean);
+      lines.push(parts.join(", ") + expiryStr);
+    });
+    return lines.join("\n");
+  }, [filteredIngredients]);
+
+  const handleCopyGroceryList = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(getGroceryListExportText());
+      setExportCopied(true);
+      setTimeout(() => setExportCopied(false), 2000);
+    } catch (err) {
+      console.error("[UniMeal] Copy grocery list error", err);
+      setError("Could not copy to clipboard.");
+    }
+  }, [getGroceryListExportText]);
+
+  const handleDownloadGroceryList = useCallback(() => {
+    const text = getGroceryListExportText();
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `unimeal-grocery-list-${new Date().toISOString().slice(0, 10)}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [getGroceryListExportText]);
+
   return (
     <ProtectedRoute>
       <div className="card">
@@ -497,6 +534,26 @@ export default function IngredientsPage() {
                 />
                 <span id="ingredients-expiring-desc">Expiring soon only</span>
               </label>
+              {filteredIngredients.length > 0 && (
+                <div className="ingredients-export-actions">
+                  <button
+                    type="button"
+                    className="btn btn-secondary ingredients-export-btn"
+                    onClick={handleCopyGroceryList}
+                    aria-label="Copy grocery list to clipboard"
+                  >
+                    {exportCopied ? "Copied!" : "Copy list"}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary ingredients-export-btn"
+                    onClick={handleDownloadGroceryList}
+                    aria-label="Download grocery list as text file"
+                  >
+                    Download .txt
+                  </button>
+                </div>
+              )}
             </div>
           </div>
           {loading ? (
