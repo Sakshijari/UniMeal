@@ -48,6 +48,74 @@ function formatCurrency(value: number | null): string {
   });
 }
 
+/** Keyword (in ingredient name) → dish suggestions for "Use it up". */
+const USE_IT_UP_SUGGESTIONS: Record<string, string[]> = {
+  milk: ["French toast", "Oatmeal", "Hot chocolate", "Smoothie"],
+  bread: ["Grilled cheese", "French toast", "Toast", "Croutons"],
+  tomato: ["Pasta sauce", "Bruschetta", "Salad", "Soup"],
+  tomatoes: ["Pasta sauce", "Bruschetta", "Salad", "Soup"],
+  chicken: ["Stir-fry", "Soup", "Sandwich", "Salad"],
+  egg: ["Scrambled eggs", "Omelette", "French toast"],
+  eggs: ["Scrambled eggs", "Omelette", "French toast"],
+  cheese: ["Grilled cheese", "Pasta", "Omelette", "Toast"],
+  potato: ["Mash", "Soup", "Roast", "Hash"],
+  potatoes: ["Mash", "Soup", "Roast", "Hash"],
+  onion: ["Stir-fry", "Soup", "Omelette", "Pasta"],
+  onions: ["Stir-fry", "Soup", "Omelette", "Pasta"],
+  rice: ["Stir-fry", "Rice bowl", "Soup", "Pudding"],
+  pasta: ["Pasta sauce", "Carbonara", "Salad"],
+  spinach: ["Salad", "Omelette", "Soup", "Pasta"],
+  mushroom: ["Stir-fry", "Soup", "Omelette", "Pasta"],
+  mushrooms: ["Stir-fry", "Soup", "Omelette", "Pasta"],
+  carrot: ["Soup", "Stir-fry", "Salad", "Roast"],
+  carrots: ["Soup", "Stir-fry", "Salad", "Roast"],
+  banana: ["Smoothie", "Oatmeal", "Pancakes"],
+  bananas: ["Smoothie", "Oatmeal", "Pancakes"],
+  lemon: ["Lemonade", "Fish", "Salad", "Tea"],
+  lemons: ["Lemonade", "Fish", "Salad", "Tea"],
+  yogurt: ["Smoothie", "Oatmeal", "Parfait"],
+  yoghurt: ["Smoothie", "Oatmeal", "Parfait"],
+  lentils: ["Soup", "Curry", "Salad"],
+  beans: ["Soup", "Salad", "Chilli", "Pasta"],
+  bacon: ["Carbonara", "Omelette", "Sandwich", "Salad"],
+  fish: ["Fish and vegetables", "Soup", "Tacos"],
+  mince: ["Bolognese", "Chilli", "Tacos"],
+  minced: ["Bolognese", "Chilli", "Tacos"],
+  beef: ["Stir-fry", "Soup", "Sandwich"],
+  pork: ["Stir-fry", "Roast", "Sandwich"],
+  lettuce: ["Salad", "Sandwich", "Wrap"],
+  cucumber: ["Salad", "Sandwich", "Tzatziki"],
+  pepper: ["Stir-fry", "Salad", "Roast", "Omelette"],
+  peppers: ["Stir-fry", "Salad", "Roast", "Omelette"],
+  broccoli: ["Stir-fry", "Soup", "Roast", "Pasta"],
+  cauliflower: ["Soup", "Roast", "Curry"],
+  zucchini: ["Stir-fry", "Pasta", "Roast"],
+  courgette: ["Stir-fry", "Pasta", "Roast"],
+  avocado: ["Toast", "Salad", "Guacamole"],
+  olive: ["Pasta", "Salad", "Pizza"],
+  olives: ["Pasta", "Salad", "Pizza"],
+};
+
+function getUseItUpSuggestions(ingredientNames: string[]): string[] {
+  const seen = new Set<string>();
+  const suggestions: string[] = [];
+  for (const name of ingredientNames) {
+    const lower = name.toLowerCase().trim();
+    if (!lower) continue;
+    for (const [keyword, dishes] of Object.entries(USE_IT_UP_SUGGESTIONS)) {
+      if (lower.includes(keyword)) {
+        for (const dish of dishes) {
+          if (!seen.has(dish)) {
+            seen.add(dish);
+            suggestions.push(dish);
+          }
+        }
+      }
+    }
+  }
+  return suggestions.slice(0, 5);
+}
+
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
   const [monthlyLimit, setMonthlyLimit] = useState<number | null>(null);
@@ -144,6 +212,11 @@ export default function DashboardPage() {
     [ingredients],
   );
   const expiringSoonCount = expiringSoon.length;
+
+  const useItUpSuggestions = useMemo(
+    () => getUseItUpSuggestions(expiringSoon.map((i) => i.name)),
+    [expiringSoon],
+  );
 
   // Upcoming meals: sort by weekday order, take first 5
   const upcomingMeals = useMemo(() => {
@@ -246,6 +319,24 @@ export default function DashboardPage() {
                 </div>
                 {(expiringSoon.length > 0 || upcomingMeals.length > 0) && (
                   <div className="dashboard-preview">
+                    {expiringSoon.length > 0 && useItUpSuggestions.length > 0 && (
+                      <div className="dashboard-use-it-up" role="region" aria-label="Use it up suggestions">
+                        <h3 className="dashboard-use-it-up-title">Use it up</h3>
+                        <p className="dashboard-use-it-up-text">
+                          You have ingredients expiring soon. Try using them in:
+                        </p>
+                        <ul className="dashboard-use-it-up-list" aria-label="Dish suggestions">
+                          {useItUpSuggestions.map((dish) => (
+                            <li key={dish} className="dashboard-use-it-up-item">
+                              {dish}
+                            </li>
+                          ))}
+                        </ul>
+                        <Link href="/meals" className="dashboard-use-it-up-link">
+                          Plan a meal →
+                        </Link>
+                      </div>
+                    )}
                     {expiringSoon.length > 0 && (
                       <div className="dashboard-preview-block">
                         <h3 className="dashboard-preview-title">Expiring soon</h3>
