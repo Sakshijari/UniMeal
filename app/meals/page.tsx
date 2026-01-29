@@ -51,6 +51,7 @@ export default function MealsPage() {
     const stored = localStorage.getItem(VIEW_STORAGE_KEY) as "list" | "week" | null;
     return stored === "list" || stored === "week" ? stored : "week";
   });
+  const [weekdayFilter, setWeekdayFilter] = useState<string>(""); // "" = all days
   const addFormRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -71,16 +72,22 @@ export default function MealsPage() {
     addFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
+  // Apply weekday filter: "" = all, otherwise only that day
+  const filteredMeals = useMemo(() => {
+    if (!weekdayFilter) return meals;
+    return meals.filter((m) => m.weekday === weekdayFilter);
+  }, [meals, weekdayFilter]);
+
   const mealsByDay = useMemo(() => {
     const map: Record<string, Meal[]> = {};
     WEEKDAYS.forEach((d) => {
       map[d.value] = [];
     });
-    meals.forEach((m) => {
+    filteredMeals.forEach((m) => {
       if (map[m.weekday]) map[m.weekday].push(m);
     });
     return map;
-  }, [meals]);
+  }, [filteredMeals]);
 
   // Realtime listener for meals
   useEffect(() => {
@@ -340,8 +347,27 @@ export default function MealsPage() {
         <section className="page-section">
           <div className="meals-view-header">
             <h2 className="page-section-title">
-              {viewMode === "week" ? "Week at a glance" : `Your planned meals (${meals.length})`}
+              {viewMode === "week" ? "Week at a glance" : `Your planned meals (${filteredMeals.length})`}
             </h2>
+            <div className="meals-filters-row">
+              <label htmlFor="meals-weekday-filter" className="meals-filter-label">
+                Filter by day
+              </label>
+              <select
+                id="meals-weekday-filter"
+                className="input meals-weekday-filter"
+                value={weekdayFilter}
+                onChange={(e) => setWeekdayFilter(e.target.value)}
+                aria-label="Filter meals by weekday"
+              >
+                <option value="">All days</option>
+                {WEEKDAYS.map((day) => (
+                  <option key={day.value} value={day.value}>
+                    {day.label}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div className="meals-view-toggle" role="tablist" aria-label="View mode">
               <button
                 type="button"
@@ -413,14 +439,18 @@ export default function MealsPage() {
                 );
               })}
             </div>
-          ) : meals.length === 0 ? (
+          ) : filteredMeals.length === 0 ? (
             <p className="page-section-text">
-              You haven&apos;t added any meals yet. Use the form above to get started!
+              {meals.length === 0
+                ? "You haven\u2019t added any meals yet. Use the form above to get started!"
+                : weekdayFilter
+                  ? `No meals planned for ${getWeekdayLabel(weekdayFilter)}. Try another day or clear the filter.`
+                  : "No meals match the current filter."}
             </p>
           ) : (
             <div id="meals-content" className="meals-list-view" role="tabpanel" aria-labelledby="meals-tab-list">
               <div className="meals-list">
-                {meals.map((meal) => (
+                {filteredMeals.map((meal) => (
                   <div key={meal.id} className="meals-list-item">
                     <div className="meals-list-item-main">
                       <span className="meals-list-item-name">{meal.name}</span>
