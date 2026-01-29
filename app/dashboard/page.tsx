@@ -10,6 +10,7 @@ import {
 import Link from "next/link";
 import { useMemo, useEffect, useState } from "react";
 
+import { OnboardingOverlay } from "../components/OnboardingOverlay";
 import { ProtectedRoute } from "../components/ProtectedRoute";
 import { useAuth } from "@/contexts/AuthContext";
 import { db } from "@/src/lib/firebase";
@@ -258,6 +259,14 @@ export default function DashboardPage() {
 
   return (
     <ProtectedRoute>
+      {user?.uid && (
+        <OnboardingOverlay
+          userId={user.uid}
+          hasBudget={monthlyLimit != null}
+          hasMeals={meals.length > 0}
+          hasIngredients={ingredients.length > 0}
+        />
+      )}
       <div className="card">
         <header className="page-header">
           <h1 className="page-title">Welcome to your UniMeal dashboard</h1>
