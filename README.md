@@ -60,8 +60,16 @@ Replace the placeholders with values from your Firebase web app config.
 See [docs/firestore_rules.md](docs/firestore_rules.md) for rationale and [FIRESTORE_SETUP.md](FIRESTORE_SETUP.md) for step-by-step troubleshooting.
 
 ### 5. Run the app
+## UniMeal
+
+UniMeal – Student meal planning, ingredient inventory and budget tracking web app (Next.js + Firebase).
+
+### Getting Started
+
+First, install dependencies and run the development server:
 
 ```bash
+npm install
 npm run dev
 ```
 
@@ -104,3 +112,4 @@ Open [http://localhost:3000](http://localhost:3000). Sign in with Google to use 
 ## License
 
 Private / educational use as required by your course.
+The app will be available at `http://localhost:3000`.
