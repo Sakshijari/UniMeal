@@ -14,6 +14,7 @@ UniMeal stores all user data under a single top-level collection, keyed by Fireb
 - `users/{userId}/mealTemplates/{templateId}` – meal templates / favorites (name + optional default weekday)
 - `users/{userId}/ingredients/{ingredientId}` – ingredient inventory
 - `users/{userId}/budget/current` – monthly budget (single document)
+- `users/{userId}/preferences/onboarding` – onboarding completed flag
 
 Every document is scoped to one user via the `userId` segment in the path.
 
@@ -57,6 +58,7 @@ Rules are defined for each subcollection/document the app uses:
 | `users/{userId}/mealTemplates/{templateId}` | Meal templates / favorites (CRUD). |
 | `users/{userId}/ingredients/{ingredientId}` | Ingredient list (CRUD). |
 | `users/{userId}/budget/{document=**}` | Budget document(s), e.g. `current`. |
+| `users/{userId}/preferences/{document=**}` | User preferences, e.g. `onboarding`. |
 
 Anything else (e.g. a new top-level collection or a typo in the path) is **not** allowed, because Firestore denies by default when no rule matches.
 

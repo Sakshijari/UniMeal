@@ -223,6 +223,128 @@ body {
   border: 1px solid var(--color-border);
 }
 
+/* First-time onboarding overlay */
+.onboarding-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.onboarding-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+}
+
+.onboarding-card {
+  position: relative;
+  width: 100%;
+  max-width: 28rem;
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  padding: 1.75rem;
+  box-shadow: var(--shadow-soft);
+  border: 1px solid var(--color-border);
+}
+
+.onboarding-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin: 0 0 0.35rem 0;
+  color: var(--color-text);
+}
+
+.onboarding-subtitle {
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  margin: 0 0 1.25rem 0;
+  line-height: 1.4;
+}
+
+.onboarding-steps {
+  list-style: none;
+  margin: 0 0 1.25rem 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.onboarding-step {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--color-section-bg);
+  border-radius: 0.5rem;
+  border: 1px solid var(--color-border);
+}
+
+.onboarding-step--done {
+  border-color: var(--color-success);
+  background: rgba(22, 101, 52, 0.08);
+}
+
+[data-theme="dark"] .onboarding-step--done {
+  background: rgba(74, 222, 128, 0.12);
+}
+
+.onboarding-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: white;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.onboarding-step-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 999px;
+  background: var(--color-success);
+  color: white;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.onboarding-step-label {
+  font-weight: 500;
+  color: var(--color-text);
+  flex: 1;
+  min-width: 0;
+}
+
+.onboarding-step-action {
+  font-size: 0.85rem;
+  padding: 0.4rem 0.75rem;
+}
+
+.onboarding-all-done {
+  font-size: 0.9rem;
+  color: var(--color-success);
+  font-weight: 500;
+  margin: 0 0 1rem 0;
+}
+
+.onboarding-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
 .page-header {
   display: flex;
   flex-direction: column;
