@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { useAuth } from "../../contexts/AuthContext";
+import { useTheme } from "../../contexts/ThemeContext";
 
 const navItems = [
   { label: "Dashboard", href: "/dashboard" },
@@ -15,6 +16,7 @@ const navItems = [
 export function AppHeader() {
   const pathname = usePathname();
   const { user, loading, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
 
   const handleLogout = async () => {
     await logout();
@@ -48,24 +50,25 @@ export function AppHeader() {
             );
           })}
         </nav>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "0.5rem",
-            fontSize: "0.8rem",
-          }}
-        >
+        <div className="app-header-actions">
+          <button
+            type="button"
+            className="theme-toggle"
+            onClick={toggleTheme}
+            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            title={theme === "dark" ? "Light mode" : "Dark mode"}
+          >
+            {theme === "dark" ? (
+              <span className="theme-toggle-icon" aria-hidden>☀</span>
+            ) : (
+              <span className="theme-toggle-icon" aria-hidden>🌙</span>
+            )}
+          </button>
           {loading && <span>Checking session…</span>}
           {!loading && user && (
             <>
               <span
-                style={{
-                  maxWidth: "11rem",
-                  whiteSpace: "nowrap",
-                  textOverflow: "ellipsis",
-                  overflow: "hidden",
-                }}
+                className="app-header-user"
                 title={user.email ?? undefined}
               >
                 Signed in as <strong>{user.email}</strong>
