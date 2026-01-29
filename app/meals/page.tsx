@@ -6,12 +6,12 @@ import {
   deleteDoc,
   doc,
   onSnapshot,
-  orderBy,
   query,
   serverTimestamp,
   Timestamp,
 } from "firebase/firestore";
-import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ProtectedRoute } from "../components/ProtectedRoute";
 import { useAuth } from "@/contexts/AuthContext";
@@ -21,6 +21,13 @@ type Meal = {
   id: string;
   name: string;
   weekday: string;
+  createdAt: Timestamp;
+};
+
+type MealTemplate = {
+  id: string;
+  name: string;
+  defaultWeekday: string; // optional in UI; stored as "" if not set
   createdAt: Timestamp;
 };
 
@@ -34,7 +41,10 @@ const WEEKDAYS = [
   { value: "sunday", label: "Sunday" },
 ] as const;
 
+const VIEW_STORAGE_KEY = "unimeal-meals-view";
+
 export default function MealsPage() {
+  const searchParams = useSearchParams();
   const { user, loading: authLoading } = useAuth();
   const [meals, setMeals] = useState<Meal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,6 +53,52 @@ export default function MealsPage() {
   const [formWeekday, setFormWeekday] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"list" | "week">(() => {
+    if (typeof window === "undefined") return "week";
+    const stored = localStorage.getItem(VIEW_STORAGE_KEY) as "list" | "week" | null;
+    return stored === "list" || stored === "week" ? stored : "week";
+  });
+  const [weekdayFilter, setWeekdayFilter] = useState<string>(""); // "" = all days
+  const [templates, setTemplates] = useState<MealTemplate[]>([]);
+  const [saveTemplateLoading, setSaveTemplateLoading] = useState(false);
+  const [deleteTemplateLoading, setDeleteTemplateLoading] = useState<string | null>(null);
+  const [exportCopied, setExportCopied] = useState(false);
+  const addFormRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    localStorage.setItem(VIEW_STORAGE_KEY, viewMode);
+  }, [viewMode]);
+
+  // Pre-fill weekday from URL ?day=monday and scroll to form
+  useEffect(() => {
+    const day = searchParams.get("day");
+    if (day && WEEKDAYS.some((d) => d.value === day)) {
+      setFormWeekday(day);
+      addFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [searchParams]);
+
+  const focusAddForm = useCallback((weekday: string) => {
+    setFormWeekday(weekday);
+    addFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
+
+  // Apply weekday filter: "" = all, otherwise only that day
+  const filteredMeals = useMemo(() => {
+    if (!weekdayFilter) return meals;
+    return meals.filter((m) => m.weekday === weekdayFilter);
+  }, [meals, weekdayFilter]);
+
+  const mealsByDay = useMemo(() => {
+    const map: Record<string, Meal[]> = {};
+    WEEKDAYS.forEach((d) => {
+      map[d.value] = [];
+    });
+    filteredMeals.forEach((m) => {
+      if (map[m.weekday]) map[m.weekday].push(m);
+    });
+    return map;
+  }, [filteredMeals]);
 
   // Realtime listener for meals
   useEffect(() => {
@@ -144,6 +200,34 @@ export default function MealsPage() {
     }
   }, [user?.uid, authLoading]);
 
+  // Realtime listener for meal templates
+  useEffect(() => {
+    if (authLoading || !user?.uid) return;
+    const templatesRef = collection(db, "users", user.uid, "mealTemplates");
+    const q = query(templatesRef);
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const list: MealTemplate[] = [];
+        snapshot.forEach((d) => {
+          const data = d.data();
+          list.push({
+            id: d.id,
+            name: data.name || "",
+            defaultWeekday: data.defaultWeekday ?? "",
+            createdAt: data.createdAt || { seconds: 0, nanoseconds: 0 },
+          } as MealTemplate);
+        });
+        list.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+        setTemplates(list);
+      },
+      (err) => {
+        console.error("[UniMeal] Meal templates listener error", err);
+      },
+    );
+    return () => unsubscribe();
+  }, [user?.uid, authLoading]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -210,6 +294,106 @@ export default function MealsPage() {
     return WEEKDAYS.find((w) => w.value === value)?.label || value;
   };
 
+  const handleSaveAsTemplate = async () => {
+    if (!formName.trim() || !user?.uid) return;
+    setSaveTemplateLoading(true);
+    setError(null);
+    try {
+      const templatesRef = collection(db, "users", user.uid, "mealTemplates");
+      await addDoc(templatesRef, {
+        name: formName.trim(),
+        defaultWeekday: formWeekday || "",
+        createdAt: serverTimestamp(),
+      });
+    } catch (err) {
+      console.error("[UniMeal] Save template error", err);
+      setError("Could not save template. Please try again.");
+    } finally {
+      setSaveTemplateLoading(false);
+    }
+  };
+
+  const handleDeleteTemplate = async (templateId: string) => {
+    if (!user?.uid) return;
+    if (!confirm("Remove this template? You can add it again later.")) return;
+    setDeleteTemplateLoading(templateId);
+    setError(null);
+    try {
+      const ref = doc(db, "users", user.uid, "mealTemplates", templateId);
+      await deleteDoc(ref);
+    } catch (err) {
+      console.error("[UniMeal] Delete template error", err);
+      setError("Could not remove template. Please try again.");
+    } finally {
+      setDeleteTemplateLoading(null);
+    }
+  };
+
+  const handleUseTemplate = (t: MealTemplate) => {
+    setFormName(t.name);
+    setFormWeekday(t.defaultWeekday || "");
+    addFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const handleAddFromTemplate = async (t: MealTemplate) => {
+    if (!user?.uid || !t.name.trim()) return;
+    const day = t.defaultWeekday || WEEKDAYS[0].value;
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      const mealsRef = collection(db, "users", user.uid, "meals");
+      await addDoc(mealsRef, {
+        name: t.name.trim(),
+        weekday: day,
+        createdAt: serverTimestamp(),
+      });
+    } catch (err) {
+      console.error("[UniMeal] Add from template error", err);
+      setError("Could not add meal. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const getWeekdayLabelForExport = (value: string) =>
+    WEEKDAYS.find((w) => w.value === value)?.label || value;
+
+  const getMealPlanExportText = useCallback(() => {
+    const lines: string[] = ["UniMeal – Meal plan", ""];
+    WEEKDAYS.forEach((d) => {
+      const dayMeals = mealsByDay[d.value] ?? [];
+      if (dayMeals.length > 0) {
+        lines.push(getWeekdayLabelForExport(d.value));
+        dayMeals.forEach((m) => lines.push(`- ${m.name}`));
+        lines.push("");
+      }
+    });
+    if (lines[lines.length - 1] === "" && lines.length > 2) lines.pop();
+    return lines.join("\n");
+  }, [mealsByDay]);
+
+  const handleCopyMealPlan = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(getMealPlanExportText());
+      setExportCopied(true);
+      setTimeout(() => setExportCopied(false), 2000);
+    } catch (err) {
+      console.error("[UniMeal] Copy meal plan error", err);
+      setError("Could not copy to clipboard.");
+    }
+  }, [getMealPlanExportText]);
+
+  const handleDownloadMealPlan = useCallback(() => {
+    const text = getMealPlanExportText();
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `unimeal-meal-plan-${new Date().toISOString().slice(0, 10)}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [getMealPlanExportText]);
+
   return (
     <ProtectedRoute>
       <div className="card">
@@ -240,8 +424,9 @@ export default function MealsPage() {
           </div>
         )}
 
-        <section className="page-section" style={{ marginBottom: "1.5rem" }}>
-          <h2 className="page-section-title">Add a meal</h2>
+        <div ref={addFormRef} className="meals-add-form-anchor">
+          <section className="page-section" style={{ marginBottom: "1.5rem" }}>
+            <h2 className="page-section-title">Add a meal</h2>
           <form onSubmit={handleSubmit}>
             <div className="input-group">
               <label className="input-label" htmlFor="meal-name">
@@ -293,73 +478,217 @@ export default function MealsPage() {
               >
                 {isSubmitting ? "Adding…" : "Add meal"}
               </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={saveTemplateLoading || !formName.trim()}
+                onClick={handleSaveAsTemplate}
+                aria-label="Save current meal as a template for later"
+              >
+                {saveTemplateLoading ? "Saving…" : "Save as template"}
+              </button>
             </div>
           </form>
-        </section>
+          </section>
+        </div>
+
+        {templates.length > 0 && (
+          <section className="page-section meals-templates-section">
+            <h2 className="page-section-title">Add from template</h2>
+            <p className="page-section-text" style={{ marginBottom: "0.75rem" }}>
+              Use a saved template to fill the form or add the meal in one click.
+            </p>
+            <ul className="meals-templates-list" aria-label="Meal templates">
+              {templates.map((t) => (
+                <li key={t.id} className="meals-templates-item">
+                  <div className="meals-templates-item-main">
+                    <span className="meals-templates-item-name">{t.name}</span>
+                    {t.defaultWeekday && (
+                      <span className="meals-templates-item-day">
+                        {getWeekdayLabel(t.defaultWeekday)}
+                      </span>
+                    )}
+                  </div>
+                  <div className="meals-templates-item-actions">
+                    <button
+                      type="button"
+                      className="btn btn-secondary meals-templates-btn"
+                      onClick={() => handleUseTemplate(t)}
+                      disabled={isSubmitting}
+                      aria-label={`Use template ${t.name} in form`}
+                    >
+                      Use in form
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary meals-templates-btn"
+                      onClick={() => handleAddFromTemplate(t)}
+                      disabled={isSubmitting}
+                      aria-label={`Add ${t.name} for ${t.defaultWeekday ? getWeekdayLabel(t.defaultWeekday) : "Monday"}`}
+                    >
+                      Add meal
+                    </button>
+                    <button
+                      type="button"
+                      className="meals-templates-delete"
+                      onClick={() => handleDeleteTemplate(t.id)}
+                      disabled={deleteTemplateLoading === t.id}
+                      aria-label={`Remove template ${t.name}`}
+                      title="Remove template"
+                    >
+                      {deleteTemplateLoading === t.id ? "…" : "×"}
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         <section className="page-section">
-          <h2 className="page-section-title">
-            Your planned meals ({meals.length})
-          </h2>
+          <div className="meals-view-header">
+            <h2 className="page-section-title">
+              {viewMode === "week" ? "Week at a glance" : `Your planned meals (${filteredMeals.length})`}
+            </h2>
+            <div className="meals-filters-row">
+              <label htmlFor="meals-weekday-filter" className="meals-filter-label">
+                Filter by day
+              </label>
+              <select
+                id="meals-weekday-filter"
+                className="input meals-weekday-filter"
+                value={weekdayFilter}
+                onChange={(e) => setWeekdayFilter(e.target.value)}
+                aria-label="Filter meals by weekday"
+              >
+                <option value="">All days</option>
+                {WEEKDAYS.map((day) => (
+                  <option key={day.value} value={day.value}>
+                    {day.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="meals-view-toggle" role="tablist" aria-label="View mode">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={viewMode === "week"}
+                aria-controls="meals-content"
+                id="meals-tab-week"
+                className={"meals-view-toggle-btn" + (viewMode === "week" ? " meals-view-toggle-btn--active" : "")}
+                onClick={() => setViewMode("week")}
+              >
+                Week
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={viewMode === "list"}
+                aria-controls="meals-content"
+                id="meals-tab-list"
+                className={"meals-view-toggle-btn" + (viewMode === "list" ? " meals-view-toggle-btn--active" : "")}
+                onClick={() => setViewMode("list")}
+              >
+                List
+              </button>
+            </div>
+            {(filteredMeals.length > 0) && (
+              <div className="meals-export-actions">
+                <button
+                  type="button"
+                  className="btn btn-secondary meals-export-btn"
+                  onClick={handleCopyMealPlan}
+                  aria-label="Copy meal plan to clipboard"
+                >
+                  {exportCopied ? "Copied!" : "Copy meal plan"}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary meals-export-btn"
+                  onClick={handleDownloadMealPlan}
+                  aria-label="Download meal plan as text file"
+                >
+                  Download .txt
+                </button>
+              </div>
+            )}
+          </div>
+
           {loading ? (
             <p className="page-section-text">Loading your meals…</p>
-          ) : meals.length === 0 ? (
-            <p className="page-section-text">
-              You haven&apos;t added any meals yet. Use the form above to get
-              started!
-            </p>
-          ) : (
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "0.75rem",
-                marginTop: "0.75rem",
-              }}
-            >
-              {meals.map((meal) => (
-                <div
-                  key={meal.id}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "0.75rem 1rem",
-                    borderRadius: "0.5rem",
-                    background: "rgba(255, 255, 255, 0.7)",
-                    border: "1px solid rgba(148, 163, 184, 0.3)",
-                  }}
-                >
-                  <div style={{ flex: 1 }}>
-                    <div
-                      style={{
-                        fontSize: "0.95rem",
-                        fontWeight: 600,
-                        marginBottom: "0.2rem",
-                      }}
-                    >
-                      {meal.name}
+          ) : viewMode === "week" ? (
+            <div id="meals-content" className="meals-week-calendar" role="tabpanel" aria-labelledby="meals-tab-week">
+              {WEEKDAYS.map((day) => {
+                const dayMeals = mealsByDay[day.value] ?? [];
+                return (
+                  <div key={day.value} className="meals-day-column">
+                    <div className="meals-day-header">
+                      <span className="meals-day-name">{day.label}</span>
+                      <button
+                        type="button"
+                        className="meals-day-add-btn"
+                        onClick={() => focusAddForm(day.value)}
+                        aria-label={`Add meal for ${day.label}`}
+                      >
+                        + Add
+                      </button>
                     </div>
-                    <div
-                      style={{
-                        fontSize: "0.8rem",
-                        color: "var(--color-text-muted)",
-                      }}
-                    >
-                      {getWeekdayLabel(meal.weekday)}
+                    <div className="meals-day-body">
+                      {dayMeals.length === 0 ? (
+                        <p className="meals-day-empty">No meals planned</p>
+                      ) : (
+                        <ul className="meals-day-list" aria-label={`Meals for ${day.label}`}>
+                          {dayMeals.map((meal) => (
+                            <li key={meal.id} className="meals-day-meal">
+                              <span className="meals-day-meal-name">{meal.name}</span>
+                              <button
+                                type="button"
+                                className="meals-day-meal-delete"
+                                onClick={() => handleDelete(meal.id)}
+                                disabled={deleteLoading === meal.id}
+                                aria-label={`Delete ${meal.name}`}
+                              >
+                                {deleteLoading === meal.id ? "…" : "×"}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    onClick={() => handleDelete(meal.id)}
-                    disabled={deleteLoading === meal.id}
-                    style={{ fontSize: "0.8rem", padding: "0.4rem 0.8rem" }}
-                  >
-                    {deleteLoading === meal.id ? "Deleting…" : "Delete"}
-                  </button>
-                </div>
-              ))}
+                );
+              })}
+            </div>
+          ) : filteredMeals.length === 0 ? (
+            <p className="page-section-text">
+              {meals.length === 0
+                ? "You haven\u2019t added any meals yet. Use the form above to get started!"
+                : weekdayFilter
+                  ? `No meals planned for ${getWeekdayLabel(weekdayFilter)}. Try another day or clear the filter.`
+                  : "No meals match the current filter."}
+            </p>
+          ) : (
+            <div id="meals-content" className="meals-list-view" role="tabpanel" aria-labelledby="meals-tab-list">
+              <div className="meals-list">
+                {filteredMeals.map((meal) => (
+                  <div key={meal.id} className="meals-list-item">
+                    <div className="meals-list-item-main">
+                      <span className="meals-list-item-name">{meal.name}</span>
+                      <span className="meals-list-item-day">{getWeekdayLabel(meal.weekday)}</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => handleDelete(meal.id)}
+                      disabled={deleteLoading === meal.id}
+                      style={{ fontSize: "0.8rem", padding: "0.4rem 0.8rem" }}
+                    >
+                      {deleteLoading === meal.id ? "Deleting…" : "Delete"}
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </section>

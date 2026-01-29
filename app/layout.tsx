@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 import { AuthProvider } from "../contexts/AuthContext";
+import { ThemeProvider } from "../contexts/ThemeContext";
 import { AppHeader } from "./components/AppHeader";
 
 export const metadata: Metadata = {
@@ -16,16 +17,25 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){var t=localStorage.getItem("unimeal-theme");document.documentElement.setAttribute("data-theme",t==="dark"?"dark":"light");})();`,
+          }}
+        />
+      </head>
       <body className="app-body">
-        <AuthProvider>
-          <div className="app-shell">
-            <AppHeader />
-            <main className="app-main">
-              <div className="app-container">{children}</div>
-            </main>
-          </div>
-        </AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <div className="app-shell">
+              <AppHeader />
+              <main className="app-main">
+                <div className="app-container">{children}</div>
+              </main>
+            </div>
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

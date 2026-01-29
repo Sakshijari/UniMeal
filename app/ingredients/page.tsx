@@ -10,7 +10,7 @@ import {
   serverTimestamp,
   Timestamp,
 } from "firebase/firestore";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ProtectedRoute } from "../components/ProtectedRoute";
 import { useAuth } from "@/contexts/AuthContext";
@@ -47,6 +47,9 @@ export default function IngredientsPage() {
   const [formExpiryDate, setFormExpiryDate] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [expiringSoonOnly, setExpiringSoonOnly] = useState(false);
+  const [exportCopied, setExportCopied] = useState(false);
 
   // Check if ingredient is expiring soon (within 3 days)
   const isExpiringSoon = (expiryDate: string): boolean => {
@@ -278,6 +281,55 @@ export default function IngredientsPage() {
     isExpiringSoon(ing.expiryDate),
   ).length;
 
+  // Filter ingredients by search (name) and optional "expiring soon only"
+  const filteredIngredients = useMemo(() => {
+    let list = ingredients;
+    const q = searchQuery.trim().toLowerCase();
+    if (q) {
+      list = list.filter((ing) => ing.name.toLowerCase().includes(q));
+    }
+    if (expiringSoonOnly) {
+      list = list.filter((ing) => isExpiringSoon(ing.expiryDate));
+    }
+    return list;
+  }, [ingredients, searchQuery, expiringSoonOnly]);
+
+  const getGroceryListExportText = useCallback(() => {
+    const lines: string[] = ["UniMeal – Grocery / ingredients list", ""];
+    filteredIngredients.forEach((ing) => {
+      const priceStr = ing.price > 0 ? `€${ing.price.toFixed(2)}` : "";
+      const expiryStr = ing.expiryDate
+        ? `, expires ${formatDate(ing.expiryDate)}`
+        : "";
+      const qtyUnit = ing.unit ? `${ing.qty} ${ing.unit}` : "";
+      const parts = [ing.name, qtyUnit, priceStr].filter(Boolean);
+      lines.push(parts.join(", ") + expiryStr);
+    });
+    return lines.join("\n");
+  }, [filteredIngredients]);
+
+  const handleCopyGroceryList = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(getGroceryListExportText());
+      setExportCopied(true);
+      setTimeout(() => setExportCopied(false), 2000);
+    } catch (err) {
+      console.error("[UniMeal] Copy grocery list error", err);
+      setError("Could not copy to clipboard.");
+    }
+  }, [getGroceryListExportText]);
+
+  const handleDownloadGroceryList = useCallback(() => {
+    const text = getGroceryListExportText();
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `unimeal-grocery-list-${new Date().toISOString().slice(0, 10)}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [getGroceryListExportText]);
+
   return (
     <ProtectedRoute>
       <div className="card">
@@ -452,15 +504,69 @@ export default function IngredientsPage() {
         </section>
 
         <section className="page-section">
-          <h2 className="page-section-title">
-            Your ingredients ({ingredients.length})
-          </h2>
+          <div className="ingredients-list-header">
+            <h2 className="page-section-title">
+              Your ingredients ({filteredIngredients.length}
+              {ingredients.length !== filteredIngredients.length
+                ? ` of ${ingredients.length}`
+                : ""}
+              )
+            </h2>
+            <div className="ingredients-filters">
+              <label htmlFor="ingredients-search" className="visually-hidden">
+                Search ingredients by name
+              </label>
+              <input
+                id="ingredients-search"
+                type="search"
+                className="input ingredients-search-input"
+                placeholder="Search by name…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                aria-label="Search ingredients by name"
+              />
+              <label className="ingredients-expiring-toggle">
+                <input
+                  type="checkbox"
+                  checked={expiringSoonOnly}
+                  onChange={(e) => setExpiringSoonOnly(e.target.checked)}
+                  aria-describedby="ingredients-expiring-desc"
+                />
+                <span id="ingredients-expiring-desc">Expiring soon only</span>
+              </label>
+              {filteredIngredients.length > 0 && (
+                <div className="ingredients-export-actions">
+                  <button
+                    type="button"
+                    className="btn btn-secondary ingredients-export-btn"
+                    onClick={handleCopyGroceryList}
+                    aria-label="Copy grocery list to clipboard"
+                  >
+                    {exportCopied ? "Copied!" : "Copy list"}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary ingredients-export-btn"
+                    onClick={handleDownloadGroceryList}
+                    aria-label="Download grocery list as text file"
+                  >
+                    Download .txt
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
           {loading ? (
             <p className="page-section-text">Loading your ingredients…</p>
           ) : ingredients.length === 0 ? (
             <p className="page-section-text">
               You haven&apos;t added any ingredients yet. Use the form above to
               get started!
+            </p>
+          ) : filteredIngredients.length === 0 ? (
+            <p className="page-section-text">
+              No ingredients match your search or filter. Try clearing the
+              search or &quot;Expiring soon only&quot;.
             </p>
           ) : (
             <div style={{ overflowX: "auto", marginTop: "0.75rem" }}>
@@ -526,7 +632,7 @@ export default function IngredientsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {ingredients.map((ingredient) => {
+                  {filteredIngredients.map((ingredient) => {
                     const expiringSoon = isExpiringSoon(ingredient.expiryDate);
                     return (
                       <tr
