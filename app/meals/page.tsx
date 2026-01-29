@@ -62,6 +62,7 @@ export default function MealsPage() {
   const [templates, setTemplates] = useState<MealTemplate[]>([]);
   const [saveTemplateLoading, setSaveTemplateLoading] = useState(false);
   const [deleteTemplateLoading, setDeleteTemplateLoading] = useState<string | null>(null);
+  const [exportCopied, setExportCopied] = useState(false);
   const addFormRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -354,6 +355,45 @@ export default function MealsPage() {
     }
   };
 
+  const getWeekdayLabelForExport = (value: string) =>
+    WEEKDAYS.find((w) => w.value === value)?.label || value;
+
+  const getMealPlanExportText = useCallback(() => {
+    const lines: string[] = ["UniMeal – Meal plan", ""];
+    WEEKDAYS.forEach((d) => {
+      const dayMeals = mealsByDay[d.value] ?? [];
+      if (dayMeals.length > 0) {
+        lines.push(getWeekdayLabelForExport(d.value));
+        dayMeals.forEach((m) => lines.push(`- ${m.name}`));
+        lines.push("");
+      }
+    });
+    if (lines[lines.length - 1] === "" && lines.length > 2) lines.pop();
+    return lines.join("\n");
+  }, [mealsByDay]);
+
+  const handleCopyMealPlan = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(getMealPlanExportText());
+      setExportCopied(true);
+      setTimeout(() => setExportCopied(false), 2000);
+    } catch (err) {
+      console.error("[UniMeal] Copy meal plan error", err);
+      setError("Could not copy to clipboard.");
+    }
+  }, [getMealPlanExportText]);
+
+  const handleDownloadMealPlan = useCallback(() => {
+    const text = getMealPlanExportText();
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `unimeal-meal-plan-${new Date().toISOString().slice(0, 10)}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [getMealPlanExportText]);
+
   return (
     <ProtectedRoute>
       <div className="card">
@@ -553,6 +593,26 @@ export default function MealsPage() {
                 List
               </button>
             </div>
+            {(filteredMeals.length > 0) && (
+              <div className="meals-export-actions">
+                <button
+                  type="button"
+                  className="btn btn-secondary meals-export-btn"
+                  onClick={handleCopyMealPlan}
+                  aria-label="Copy meal plan to clipboard"
+                >
+                  {exportCopied ? "Copied!" : "Copy meal plan"}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary meals-export-btn"
+                  onClick={handleDownloadMealPlan}
+                  aria-label="Download meal plan as text file"
+                >
+                  Download .txt
+                </button>
+              </div>
+            )}
           </div>
 
           {loading ? (

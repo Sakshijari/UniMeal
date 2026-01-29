@@ -735,6 +735,28 @@ select.input {
   accent-color: var(--color-primary);
 }
 
+.ingredients-export-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ingredients-export-btn {
+  font-size: 0.85rem;
+  padding: 0.4rem 0.75rem;
+}
+
+.meals-export-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.meals-export-btn {
+  font-size: 0.85rem;
+  padding: 0.4rem 0.75rem;
+}
+
 .meals-view-toggle {
   display: flex;
   align-items: center;

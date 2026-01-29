@@ -1,0 +1,28 @@
+rules_version = '2';
+// UniMeal Firestore Security Rules
+// Principle: authenticated users may only read/write data under their own userId.
+// All other paths are denied by default.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users can only access their own data
+    // Path: users/{userId}/meals/{mealId}
+    match /users/{userId}/meals/{mealId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Path: users/{userId}/ingredients/{ingredientId}
+    match /users/{userId}/ingredients/{ingredientId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Path: users/{userId}/budget/{document=**}
+    match /users/{userId}/budget/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Path: users/{userId}/mealTemplates/{templateId}
+    match /users/{userId}/mealTemplates/{templateId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}
