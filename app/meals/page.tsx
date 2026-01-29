@@ -6,12 +6,12 @@ import {
   deleteDoc,
   doc,
   onSnapshot,
-  orderBy,
   query,
   serverTimestamp,
   Timestamp,
 } from "firebase/firestore";
-import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ProtectedRoute } from "../components/ProtectedRoute";
 import { useAuth } from "@/contexts/AuthContext";
@@ -34,7 +34,10 @@ const WEEKDAYS = [
   { value: "sunday", label: "Sunday" },
 ] as const;
 
+const VIEW_STORAGE_KEY = "unimeal-meals-view";
+
 export default function MealsPage() {
+  const searchParams = useSearchParams();
   const { user, loading: authLoading } = useAuth();
   const [meals, setMeals] = useState<Meal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,6 +46,41 @@ export default function MealsPage() {
   const [formWeekday, setFormWeekday] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"list" | "week">(() => {
+    if (typeof window === "undefined") return "week";
+    const stored = localStorage.getItem(VIEW_STORAGE_KEY) as "list" | "week" | null;
+    return stored === "list" || stored === "week" ? stored : "week";
+  });
+  const addFormRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    localStorage.setItem(VIEW_STORAGE_KEY, viewMode);
+  }, [viewMode]);
+
+  // Pre-fill weekday from URL ?day=monday and scroll to form
+  useEffect(() => {
+    const day = searchParams.get("day");
+    if (day && WEEKDAYS.some((d) => d.value === day)) {
+      setFormWeekday(day);
+      addFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [searchParams]);
+
+  const focusAddForm = useCallback((weekday: string) => {
+    setFormWeekday(weekday);
+    addFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
+
+  const mealsByDay = useMemo(() => {
+    const map: Record<string, Meal[]> = {};
+    WEEKDAYS.forEach((d) => {
+      map[d.value] = [];
+    });
+    meals.forEach((m) => {
+      if (map[m.weekday]) map[m.weekday].push(m);
+    });
+    return map;
+  }, [meals]);
 
   // Realtime listener for meals
   useEffect(() => {
@@ -240,8 +278,9 @@ export default function MealsPage() {
           </div>
         )}
 
-        <section className="page-section" style={{ marginBottom: "1.5rem" }}>
-          <h2 className="page-section-title">Add a meal</h2>
+        <div ref={addFormRef} className="meals-add-form-anchor">
+          <section className="page-section" style={{ marginBottom: "1.5rem" }}>
+            <h2 className="page-section-title">Add a meal</h2>
           <form onSubmit={handleSubmit}>
             <div className="input-group">
               <label className="input-label" htmlFor="meal-name">
@@ -295,71 +334,110 @@ export default function MealsPage() {
               </button>
             </div>
           </form>
-        </section>
+          </section>
+        </div>
 
         <section className="page-section">
-          <h2 className="page-section-title">
-            Your planned meals ({meals.length})
-          </h2>
+          <div className="meals-view-header">
+            <h2 className="page-section-title">
+              {viewMode === "week" ? "Week at a glance" : `Your planned meals (${meals.length})`}
+            </h2>
+            <div className="meals-view-toggle" role="tablist" aria-label="View mode">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={viewMode === "week"}
+                aria-controls="meals-content"
+                id="meals-tab-week"
+                className={"meals-view-toggle-btn" + (viewMode === "week" ? " meals-view-toggle-btn--active" : "")}
+                onClick={() => setViewMode("week")}
+              >
+                Week
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={viewMode === "list"}
+                aria-controls="meals-content"
+                id="meals-tab-list"
+                className={"meals-view-toggle-btn" + (viewMode === "list" ? " meals-view-toggle-btn--active" : "")}
+                onClick={() => setViewMode("list")}
+              >
+                List
+              </button>
+            </div>
+          </div>
+
           {loading ? (
             <p className="page-section-text">Loading your meals…</p>
-          ) : meals.length === 0 ? (
-            <p className="page-section-text">
-              You haven&apos;t added any meals yet. Use the form above to get
-              started!
-            </p>
-          ) : (
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "0.75rem",
-                marginTop: "0.75rem",
-              }}
-            >
-              {meals.map((meal) => (
-                <div
-                  key={meal.id}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "0.75rem 1rem",
-                    borderRadius: "0.5rem",
-                    background: "rgba(255, 255, 255, 0.7)",
-                    border: "1px solid rgba(148, 163, 184, 0.3)",
-                  }}
-                >
-                  <div style={{ flex: 1 }}>
-                    <div
-                      style={{
-                        fontSize: "0.95rem",
-                        fontWeight: 600,
-                        marginBottom: "0.2rem",
-                      }}
-                    >
-                      {meal.name}
+          ) : viewMode === "week" ? (
+            <div id="meals-content" className="meals-week-calendar" role="tabpanel" aria-labelledby="meals-tab-week">
+              {WEEKDAYS.map((day) => {
+                const dayMeals = mealsByDay[day.value] ?? [];
+                return (
+                  <div key={day.value} className="meals-day-column">
+                    <div className="meals-day-header">
+                      <span className="meals-day-name">{day.label}</span>
+                      <button
+                        type="button"
+                        className="meals-day-add-btn"
+                        onClick={() => focusAddForm(day.value)}
+                        aria-label={`Add meal for ${day.label}`}
+                      >
+                        + Add
+                      </button>
                     </div>
-                    <div
-                      style={{
-                        fontSize: "0.8rem",
-                        color: "var(--color-text-muted)",
-                      }}
-                    >
-                      {getWeekdayLabel(meal.weekday)}
+                    <div className="meals-day-body">
+                      {dayMeals.length === 0 ? (
+                        <p className="meals-day-empty">No meals planned</p>
+                      ) : (
+                        <ul className="meals-day-list" aria-label={`Meals for ${day.label}`}>
+                          {dayMeals.map((meal) => (
+                            <li key={meal.id} className="meals-day-meal">
+                              <span className="meals-day-meal-name">{meal.name}</span>
+                              <button
+                                type="button"
+                                className="meals-day-meal-delete"
+                                onClick={() => handleDelete(meal.id)}
+                                disabled={deleteLoading === meal.id}
+                                aria-label={`Delete ${meal.name}`}
+                              >
+                                {deleteLoading === meal.id ? "…" : "×"}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    onClick={() => handleDelete(meal.id)}
-                    disabled={deleteLoading === meal.id}
-                    style={{ fontSize: "0.8rem", padding: "0.4rem 0.8rem" }}
-                  >
-                    {deleteLoading === meal.id ? "Deleting…" : "Delete"}
-                  </button>
-                </div>
-              ))}
+                );
+              })}
+            </div>
+          ) : meals.length === 0 ? (
+            <p className="page-section-text">
+              You haven&apos;t added any meals yet. Use the form above to get started!
+            </p>
+          ) : (
+            <div id="meals-content" className="meals-list-view" role="tabpanel" aria-labelledby="meals-tab-list">
+              <div className="meals-list">
+                {meals.map((meal) => (
+                  <div key={meal.id} className="meals-list-item">
+                    <div className="meals-list-item-main">
+                      <span className="meals-list-item-name">{meal.name}</span>
+                      <span className="meals-list-item-day">{getWeekdayLabel(meal.weekday)}</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => handleDelete(meal.id)}
+                      disabled={deleteLoading === meal.id}
+                      style={{ fontSize: "0.8rem", padding: "0.4rem 0.8rem" }}
+                    >
+                      {deleteLoading === meal.id ? "Deleting…" : "Delete"}
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </section>
