@@ -10,7 +10,7 @@ import {
   serverTimestamp,
   Timestamp,
 } from "firebase/firestore";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { ProtectedRoute } from "../components/ProtectedRoute";
 import { useAuth } from "@/contexts/AuthContext";
@@ -47,6 +47,8 @@ export default function IngredientsPage() {
   const [formExpiryDate, setFormExpiryDate] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [expiringSoonOnly, setExpiringSoonOnly] = useState(false);
 
   // Check if ingredient is expiring soon (within 3 days)
   const isExpiringSoon = (expiryDate: string): boolean => {
@@ -278,6 +280,19 @@ export default function IngredientsPage() {
     isExpiringSoon(ing.expiryDate),
   ).length;
 
+  // Filter ingredients by search (name) and optional "expiring soon only"
+  const filteredIngredients = useMemo(() => {
+    let list = ingredients;
+    const q = searchQuery.trim().toLowerCase();
+    if (q) {
+      list = list.filter((ing) => ing.name.toLowerCase().includes(q));
+    }
+    if (expiringSoonOnly) {
+      list = list.filter((ing) => isExpiringSoon(ing.expiryDate));
+    }
+    return list;
+  }, [ingredients, searchQuery, expiringSoonOnly]);
+
   return (
     <ProtectedRoute>
       <div className="card">
@@ -452,15 +467,49 @@ export default function IngredientsPage() {
         </section>
 
         <section className="page-section">
-          <h2 className="page-section-title">
-            Your ingredients ({ingredients.length})
-          </h2>
+          <div className="ingredients-list-header">
+            <h2 className="page-section-title">
+              Your ingredients ({filteredIngredients.length}
+              {ingredients.length !== filteredIngredients.length
+                ? ` of ${ingredients.length}`
+                : ""}
+              )
+            </h2>
+            <div className="ingredients-filters">
+              <label htmlFor="ingredients-search" className="visually-hidden">
+                Search ingredients by name
+              </label>
+              <input
+                id="ingredients-search"
+                type="search"
+                className="input ingredients-search-input"
+                placeholder="Search by name…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                aria-label="Search ingredients by name"
+              />
+              <label className="ingredients-expiring-toggle">
+                <input
+                  type="checkbox"
+                  checked={expiringSoonOnly}
+                  onChange={(e) => setExpiringSoonOnly(e.target.checked)}
+                  aria-describedby="ingredients-expiring-desc"
+                />
+                <span id="ingredients-expiring-desc">Expiring soon only</span>
+              </label>
+            </div>
+          </div>
           {loading ? (
             <p className="page-section-text">Loading your ingredients…</p>
           ) : ingredients.length === 0 ? (
             <p className="page-section-text">
               You haven&apos;t added any ingredients yet. Use the form above to
               get started!
+            </p>
+          ) : filteredIngredients.length === 0 ? (
+            <p className="page-section-text">
+              No ingredients match your search or filter. Try clearing the
+              search or &quot;Expiring soon only&quot;.
             </p>
           ) : (
             <div style={{ overflowX: "auto", marginTop: "0.75rem" }}>
@@ -526,7 +575,7 @@ export default function IngredientsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {ingredients.map((ingredient) => {
+                  {filteredIngredients.map((ingredient) => {
                     const expiringSoon = isExpiringSoon(ingredient.expiryDate);
                     return (
                       <tr
