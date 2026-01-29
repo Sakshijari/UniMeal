@@ -24,6 +24,13 @@ type Meal = {
   createdAt: Timestamp;
 };
 
+type MealTemplate = {
+  id: string;
+  name: string;
+  defaultWeekday: string; // optional in UI; stored as "" if not set
+  createdAt: Timestamp;
+};
+
 const WEEKDAYS = [
   { value: "monday", label: "Monday" },
   { value: "tuesday", label: "Tuesday" },
@@ -52,6 +59,9 @@ export default function MealsPage() {
     return stored === "list" || stored === "week" ? stored : "week";
   });
   const [weekdayFilter, setWeekdayFilter] = useState<string>(""); // "" = all days
+  const [templates, setTemplates] = useState<MealTemplate[]>([]);
+  const [saveTemplateLoading, setSaveTemplateLoading] = useState(false);
+  const [deleteTemplateLoading, setDeleteTemplateLoading] = useState<string | null>(null);
   const addFormRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -189,6 +199,34 @@ export default function MealsPage() {
     }
   }, [user?.uid, authLoading]);
 
+  // Realtime listener for meal templates
+  useEffect(() => {
+    if (authLoading || !user?.uid) return;
+    const templatesRef = collection(db, "users", user.uid, "mealTemplates");
+    const q = query(templatesRef);
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const list: MealTemplate[] = [];
+        snapshot.forEach((d) => {
+          const data = d.data();
+          list.push({
+            id: d.id,
+            name: data.name || "",
+            defaultWeekday: data.defaultWeekday ?? "",
+            createdAt: data.createdAt || { seconds: 0, nanoseconds: 0 },
+          } as MealTemplate);
+        });
+        list.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+        setTemplates(list);
+      },
+      (err) => {
+        console.error("[UniMeal] Meal templates listener error", err);
+      },
+    );
+    return () => unsubscribe();
+  }, [user?.uid, authLoading]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -253,6 +291,67 @@ export default function MealsPage() {
 
   const getWeekdayLabel = (value: string) => {
     return WEEKDAYS.find((w) => w.value === value)?.label || value;
+  };
+
+  const handleSaveAsTemplate = async () => {
+    if (!formName.trim() || !user?.uid) return;
+    setSaveTemplateLoading(true);
+    setError(null);
+    try {
+      const templatesRef = collection(db, "users", user.uid, "mealTemplates");
+      await addDoc(templatesRef, {
+        name: formName.trim(),
+        defaultWeekday: formWeekday || "",
+        createdAt: serverTimestamp(),
+      });
+    } catch (err) {
+      console.error("[UniMeal] Save template error", err);
+      setError("Could not save template. Please try again.");
+    } finally {
+      setSaveTemplateLoading(false);
+    }
+  };
+
+  const handleDeleteTemplate = async (templateId: string) => {
+    if (!user?.uid) return;
+    if (!confirm("Remove this template? You can add it again later.")) return;
+    setDeleteTemplateLoading(templateId);
+    setError(null);
+    try {
+      const ref = doc(db, "users", user.uid, "mealTemplates", templateId);
+      await deleteDoc(ref);
+    } catch (err) {
+      console.error("[UniMeal] Delete template error", err);
+      setError("Could not remove template. Please try again.");
+    } finally {
+      setDeleteTemplateLoading(null);
+    }
+  };
+
+  const handleUseTemplate = (t: MealTemplate) => {
+    setFormName(t.name);
+    setFormWeekday(t.defaultWeekday || "");
+    addFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const handleAddFromTemplate = async (t: MealTemplate) => {
+    if (!user?.uid || !t.name.trim()) return;
+    const day = t.defaultWeekday || WEEKDAYS[0].value;
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      const mealsRef = collection(db, "users", user.uid, "meals");
+      await addDoc(mealsRef, {
+        name: t.name.trim(),
+        weekday: day,
+        createdAt: serverTimestamp(),
+      });
+    } catch (err) {
+      console.error("[UniMeal] Add from template error", err);
+      setError("Could not add meal. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -339,10 +438,72 @@ export default function MealsPage() {
               >
                 {isSubmitting ? "Adding…" : "Add meal"}
               </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={saveTemplateLoading || !formName.trim()}
+                onClick={handleSaveAsTemplate}
+                aria-label="Save current meal as a template for later"
+              >
+                {saveTemplateLoading ? "Saving…" : "Save as template"}
+              </button>
             </div>
           </form>
           </section>
         </div>
+
+        {templates.length > 0 && (
+          <section className="page-section meals-templates-section">
+            <h2 className="page-section-title">Add from template</h2>
+            <p className="page-section-text" style={{ marginBottom: "0.75rem" }}>
+              Use a saved template to fill the form or add the meal in one click.
+            </p>
+            <ul className="meals-templates-list" aria-label="Meal templates">
+              {templates.map((t) => (
+                <li key={t.id} className="meals-templates-item">
+                  <div className="meals-templates-item-main">
+                    <span className="meals-templates-item-name">{t.name}</span>
+                    {t.defaultWeekday && (
+                      <span className="meals-templates-item-day">
+                        {getWeekdayLabel(t.defaultWeekday)}
+                      </span>
+                    )}
+                  </div>
+                  <div className="meals-templates-item-actions">
+                    <button
+                      type="button"
+                      className="btn btn-secondary meals-templates-btn"
+                      onClick={() => handleUseTemplate(t)}
+                      disabled={isSubmitting}
+                      aria-label={`Use template ${t.name} in form`}
+                    >
+                      Use in form
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary meals-templates-btn"
+                      onClick={() => handleAddFromTemplate(t)}
+                      disabled={isSubmitting}
+                      aria-label={`Add ${t.name} for ${t.defaultWeekday ? getWeekdayLabel(t.defaultWeekday) : "Monday"}`}
+                    >
+                      Add meal
+                    </button>
+                    <button
+                      type="button"
+                      className="meals-templates-delete"
+                      onClick={() => handleDeleteTemplate(t.id)}
+                      disabled={deleteTemplateLoading === t.id}
+                      aria-label={`Remove template ${t.name}`}
+                      title="Remove template"
+                    >
+                      {deleteTemplateLoading === t.id ? "…" : "×"}
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         <section className="page-section">
           <div className="meals-view-header">

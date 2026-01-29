@@ -11,6 +11,7 @@ This document explains the Firestore security rules used in UniMeal and why they
 UniMeal stores all user data under a single top-level collection, keyed by Firebase Auth UID:
 
 - `users/{userId}/meals/{mealId}` – planned meals
+- `users/{userId}/mealTemplates/{templateId}` – meal templates / favorites (name + optional default weekday)
 - `users/{userId}/ingredients/{ingredientId}` – ingredient inventory
 - `users/{userId}/budget/current` – monthly budget (single document)
 
@@ -53,6 +54,7 @@ Rules are defined for each subcollection/document the app uses:
 | Path pattern | Purpose |
 |--------------|--------|
 | `users/{userId}/meals/{mealId}` | Meal planning (CRUD). |
+| `users/{userId}/mealTemplates/{templateId}` | Meal templates / favorites (CRUD). |
 | `users/{userId}/ingredients/{ingredientId}` | Ingredient list (CRUD). |
 | `users/{userId}/budget/{document=**}` | Budget document(s), e.g. `current`. |
 
