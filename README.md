@@ -14,6 +14,14 @@ UniMeal is a student meal-planning web app. Plan meals for the week, track ingre
 
 ---
 
+## Live demo
+
+UniMeal is deployed to Firebase Hosting and available here:
+
+- `https://unimeal-a59b8.web.app`
+
+---
+
 ## Setup
 
 ### Prerequisites
@@ -77,6 +85,7 @@ Open [http://localhost:3000](http://localhost:3000). Sign in with Google to use 
 | `npm run build` | Build for production   |
 | `npm run start` | Start production server |
 | `npm run lint`  | Run ESLint             |
+| `npm run export` | Build and deploy to Firebase Hosting (uses your default project) |
 
 ---
 
