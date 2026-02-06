@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Export as a static site for Firebase Hosting
+  output: "export",
 };
 
 export default nextConfig;

@@ -11,7 +11,7 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ProtectedRoute } from "../components/ProtectedRoute";
 import { useAuth } from "@/contexts/AuthContext";
@@ -44,6 +44,20 @@ const WEEKDAYS = [
 const VIEW_STORAGE_KEY = "unimeal-meals-view";
 
 export default function MealsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="card">
+          <p className="page-section-text">Loading meals…</p>
+        </div>
+      }
+    >
+      <MealsPageInner />
+    </Suspense>
+  );
+}
+
+function MealsPageInner() {
   const searchParams = useSearchParams();
   const { user, loading: authLoading } = useAuth();
   const [meals, setMeals] = useState<Meal[]>([]);
